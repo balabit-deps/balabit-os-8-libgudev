@@ -1,0 +1,45 @@
+#! /usr/bin/make -f
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,-z,defs -Wl,-O1 -Wl,--as-needed
+
+VERSION = $(shell dpkg-parsechangelog | sed -n -e '/^Version:/s/.*: //p')
+
+%:
+	dh $@ --with gir,gnome
+
+autoreconf:
+	gtkdocize --copy --docdir docs/
+	autoreconf -f -i
+
+override_dh_autoreconf:
+	dh_autoreconf debian/rules -- autoreconf
+
+ifeq (, $(filter nocheck, $(DEB_BUILD_OPTIONS)))
+CONFFLAGS = --enable-umockdev
+else
+CONFFLAGS = --disable-umockdev
+endif
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		--enable-gtk-doc \
+		$(CONFFLAGS)
+
+override_dh_install:
+	find debian/tmp -name '*.la' -print -delete
+	dh_install
+
+override_dh_missing:
+	dh_missing --fail-missing
+
+override_dh_makeshlibs:
+	dh_makeshlibs -- -c4
+
+override_dh_gencontrol:
+	# Ubuntu has an epoch on gudev
+	if dpkg-vendor --is ubuntu; then \
+		dh_gencontrol -- "-v1:$(VERSION)"; \
+	else \
+		dh_gencontrol; \
+	fi
